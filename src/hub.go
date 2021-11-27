@@ -13,24 +13,24 @@ type void struct {
 }
 
 type Hub struct {
-	clients map[*Client]void
+	clients map[HubWriter]void
 
-	rooms map[string]*Client
+	rooms map[string]HubWriter
 
 	broadcast chan Message
 
-	register chan *Client
+	register chan HubWriter
 
-	unregister chan *Client
+	unregister chan HubWriter
 }
 
 func newHub() *Hub {
 	return &Hub{
 		broadcast:  make(chan Message),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]void),
-		rooms:      make(map[string]*Client),
+		register:   make(chan HubWriter),
+		unregister: make(chan HubWriter),
+		clients:    make(map[HubWriter]void),
+		rooms:      make(map[string]HubWriter),
 	}
 }
 
@@ -39,19 +39,19 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = void{}
-			h.rooms[client.id] = client
+			h.rooms[client.GetId()] = client
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				delete(h.rooms, client.id)
-				close(client.send)
+				delete(h.rooms, client.GetId())
+				close(*client.GetSendChan())
 			}
 		case message := <-h.broadcast:
 			if client, err := h.rooms[message.Id]; err {
 				select {
-				case client.send <- []byte(message.Message):
+				case *client.GetSendChan() <- []byte(message.Message):
 				default:
-					close(client.send)
+					close(*client.GetSendChan())
 					delete(h.clients, client)
 					h.rooms[message.Id] = nil
 				}

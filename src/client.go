@@ -38,6 +38,14 @@ type Client struct {
 	id string
 }
 
+func (c *Client) GetSendChan() *chan []byte {
+	return &c.send
+}
+
+func (c *Client) GetId() string {
+	return c.id
+}
+
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
@@ -92,10 +100,10 @@ func (c *Client) writePump() {
 				return
 			}
 			n := len(c.send)
-			messages := make([]string, n + 1)
+			messages := make([]string, n+1)
 			messages[0] = string(message)
 
-			for i := 1; i < n + 1; i++ {
+			for i := 1; i < n+1; i++ {
 				messages[i] = string(<-c.send)
 			}
 			messageJson, _ := json.Marshal(messages)
