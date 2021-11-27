@@ -5,24 +5,22 @@ import (
 )
 
 type Message struct {
-	Id      int    `json:"id"`
+	Id      string `json:"id"`
 	Message string `json:"message"`
 }
 
+type void struct {
+}
+
 type Hub struct {
-	// Registered clients.
-	clients map[*Client]bool
+	clients map[*Client]void
 
-	//get client from id
-	registered map[int]*Client
+	rooms map[string]*Client
 
-	// Inbound messages from the clients.
 	broadcast chan Message
 
-	// Register requests from the clients.
 	register chan *Client
 
-	// Unregister requests from clients.
 	unregister chan *Client
 }
 
@@ -31,8 +29,8 @@ func newHub() *Hub {
 		broadcast:  make(chan Message),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
-		registered: make(map[int]*Client),
+		clients:    make(map[*Client]void),
+		rooms:      make(map[string]*Client),
 	}
 }
 
@@ -40,22 +38,22 @@ func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.clients[client] = true
-			h.registered[client.id] = client
+			h.clients[client] = void{}
+			h.rooms[client.id] = client
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				delete(h.registered, client.id)
+				delete(h.rooms, client.id)
 				close(client.send)
 			}
 		case message := <-h.broadcast:
-			if client, err := h.registered[message.Id]; err {
+			if client, err := h.rooms[message.Id]; err {
 				select {
 				case client.send <- []byte(message.Message):
 				default:
 					close(client.send)
 					delete(h.clients, client)
-					h.registered[message.Id] = nil
+					h.rooms[message.Id] = nil
 				}
 			} else {
 				log.Println("No such channel")
