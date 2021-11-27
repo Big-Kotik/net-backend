@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -76,7 +77,9 @@ func (c *Client) readPump() {
 		var message Message
 		err = json.Unmarshal(messageBytes, &message)
 
+		fmt.Println(message)
 		if err != nil {
+			log.Printf("error: %v", err)
 			log.Printf("can't parse to json")
 			break
 		}
@@ -94,21 +97,25 @@ func (c *Client) readPump() {
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
+		log.Println("Close connection")
 		ticker.Stop()
 		c.conn.Close()
 	}()
 	for {
 		select {
 		case message, ok := <-c.send:
+			log.Println(message)
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
+				log.Println("Hub close channel")
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				log.Fatal("err")
 				return
 			}
 			w.Write(message)
@@ -121,6 +128,7 @@ func (c *Client) writePump() {
 			}
 
 			if err := w.Close(); err != nil {
+				log.Fatal("err")
 				return
 			}
 		case <-ticker.C:
@@ -139,18 +147,15 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	id := r.URL.Query().Get("id")
-	idInt, err := strconv.Atoi(id)
 
-	if id == "" || err != nil {
-		log.Println("can't get id")
-		return
-	}
+	id := time.Now().Nanosecond()
 
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), id: idInt}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), id: id}
 	client.hub.register <- client
-	client.hub.registered[idInt] = client
 
+	client.send <- []byte(strconv.Itoa(id))
+
+	log.Println(id)
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

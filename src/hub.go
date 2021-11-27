@@ -1,7 +1,7 @@
 package main
 
 type Message struct {
-	Id int `json:"id"`
+	Id      int    `json:"id"`
 	Message []byte `json:"message"`
 }
 
@@ -37,20 +37,14 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
+			h.registered[client.id] = client
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
+				delete(h.registered, client.id)
 				close(client.send)
 			}
 		case message := <-h.broadcast:
-			//for client := range h.clients {
-			//	select {
-			//	case client.send <- message:
-			//	default:
-			//		close(client.send)
-			//		delete(h.clients, client)
-			//	}
-			//}
 			if client, err := h.registered[message.Id]; !err {
 				select {
 				case client.send <- message.Message:
