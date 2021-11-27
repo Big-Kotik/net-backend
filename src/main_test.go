@@ -30,6 +30,9 @@ type APISuite struct {
 func (s *APISuite) SetupSuite() {
 	srv := newServer()
 	log.Println("setup start")
+
+	time.Sleep(250 * time.Millisecond)
+
 	go func() {
 		log.Println("test server started")
 		log.Fatal(srv.ListenAndServe())
