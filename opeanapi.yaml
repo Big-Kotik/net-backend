@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: relay server
+  description: simple relay server, with websockets
+  version: 1.0.0
+servers:
+  - url: localhost:8080
+paths: 
+  /:
+    get:
+      responses:
+        200:
+          description: get home page
+  /ws:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Parameter description in CommonMark or HTML.
+          schema:
+            type : integer
+            format: int64
+    responses:
+      200:
+        description: ws create success
+      400:
+        description: error
+        requestBody:
+
+
+            
+
+
+  
