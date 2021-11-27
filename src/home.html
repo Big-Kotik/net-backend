@@ -6,8 +6,9 @@
         window.onload = function () {
             let conn;
             const msg = document.getElementById("msg");
+            const id = document.getElementById("id");
             const log = document.getElementById("log");
-            let id = 10;
+
 
             function appendLog(item) {
                 const doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
@@ -24,13 +25,16 @@
                 if (!msg.value) {
                     return false;
                 }
+                if (!id.value) {
+                    return false;
+                }
                 console.log(JSON.stringify({
                     message: msg.value,
                     id: id,
                 }))
                 conn.send(JSON.stringify({
                     message: msg.value,
-                    id: id,
+                    id: +id.value,
                 }));
                 msg.value = "";
                 return false;
@@ -101,6 +105,7 @@
 <div id="log"></div>
 <form id="form">
     <input type="submit" value="Send" />
+    <input type="text" id="id"/>
     <input type="text" id="msg" size="64" autofocus />
 </form>
 </body>

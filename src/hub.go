@@ -1,8 +1,12 @@
 package main
 
+import (
+	"log"
+)
+
 type Message struct {
 	Id      int    `json:"id"`
-	Message []byte `json:"message"`
+	Message string `json:"message"`
 }
 
 type Hub struct {
@@ -45,14 +49,16 @@ func (h *Hub) run() {
 				close(client.send)
 			}
 		case message := <-h.broadcast:
-			if client, err := h.registered[message.Id]; !err {
+			if client, err := h.registered[message.Id]; err {
 				select {
-				case client.send <- message.Message:
+				case client.send <- []byte(message.Message):
 				default:
 					close(client.send)
 					delete(h.clients, client)
 					h.registered[message.Id] = nil
 				}
+			} else {
+				log.Println("No such channel")
 			}
 		}
 	}
