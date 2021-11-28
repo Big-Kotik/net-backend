@@ -34,8 +34,6 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	client.send <- []byte(id)
 
-	log.Println(id)
-
 	go client.writePump()
 	go client.readPump()
 }

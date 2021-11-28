@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
@@ -65,7 +64,6 @@ func (c *Client) readPump() {
 		var message Message
 		err = json.Unmarshal(messageBytes, &message)
 
-		fmt.Println(message)
 		if err != nil {
 			log.Printf("error: %v", err)
 			log.Printf("can't parse to json")
@@ -79,17 +77,14 @@ func (c *Client) readPump() {
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
-		log.Println("Close connection")
 		ticker.Stop()
 		c.conn.Close()
 	}()
 	for {
 		select {
 		case message, ok := <-c.send:
-			log.Println(message)
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				log.Println("Hub close channel")
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
