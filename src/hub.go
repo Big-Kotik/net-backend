@@ -53,7 +53,7 @@ func (h *Hub) run() {
 				default:
 					close(*client.GetSendChan())
 					delete(h.clients, client)
-					h.rooms[message.Id] = nil
+					delete(h.rooms, message.Id)
 				}
 			} else {
 				log.Println("No such channel")
