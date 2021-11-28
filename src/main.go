@@ -12,7 +12,6 @@ var addr = flag.String("addr", ":8080", "http service address")
 func newServer() *http.Server {
 	r := mux.NewRouter()
 	debug := flag.Bool("debug", false, "run debug mode")
-	room := flag.Bool("room", false, "run room support")
 	hub := newHub()
 	flag.Parse()
 
@@ -20,11 +19,9 @@ func newServer() *http.Server {
 	if *debug {
 		r.HandleFunc("/", serveHome)
 	}
-	if *room {
-		r.HandleFunc("/create_room", func(writer http.ResponseWriter, request *http.Request) {
-			serveRoom(hub, writer, request)
-		})
-	}
+	r.HandleFunc("/create_room", func(writer http.ResponseWriter, request *http.Request) {
+		serveRoom(hub, writer, request)
+	})
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(hub, w, r)
 	})
