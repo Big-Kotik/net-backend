@@ -40,12 +40,13 @@ func (s *APISuite) SetupSuite() {
 
 func (s *APISuite) TestWebSockets() {
 	parseId := func(message []byte) string {
-		idSlice := make([]string, 0)
+		idSlice := make([]Message, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
 			s.Require().Failf("Can't parse message", "fail with error: %v", err)
 		}
-		return idSlice[0]
+		s.Require().Equal("Success", idSlice[0].Message)
+		return idSlice[0].Destination
 	}
 
 	s.Run("two sockets test", func() {
@@ -81,24 +82,29 @@ func (s *APISuite) TestWebSockets() {
 
 		s.Require().NotEqual(firstId, secondId)
 
-		secondSocket.WriteJSON(Message{firstId, "Hello, world!"})
+		testMessage := Message{firstId, secondId, "Hello, world!"}
+		secondSocket.WriteJSON(testMessage)
 
 		_, getMessage, err := firstSocket.ReadMessage()
 
-		s.Require().Equal("[\"Hello, world!\"]", string(getMessage))
+		messages := make([]Message, 0)
+		json.Unmarshal(getMessage, &messages)
+
+		s.Require().Equal(testMessage, messages[0])
 	})
 }
 
 func (s *APISuite) TestRooms() {
 	parseId := func(message []byte) string {
-		idSlice := make([]string, 0)
+		idSlice := make([]Message, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
 			s.Require().Failf("Can't parse message", "fail with error: %v", err)
 		}
-		return idSlice[0]
+		s.Require().Equal("Success", idSlice[0].Message)
+		return idSlice[0].Destination
 	}
-	s.Run("Test rooms", func() {
+	s.Run("Test writers", func() {
 		u := url.URL{Scheme: "ws", Host: servAddr, Path: "/ws"}
 		sockets := make([]*websocket.Conn, 5)
 		ids := make([]string, 5)
@@ -144,11 +150,18 @@ func (s *APISuite) TestRooms() {
 		}
 		roomId := string(data)
 
-		sockets[0].WriteJSON(Message{roomId, "Hello, world!"})
+		testMessage := Message{roomId, ids[0], "Hello, world!"}
+		sockets[0].WriteJSON(testMessage)
 
-		for _, sock := range sockets {
+		for ind, sock := range sockets {
 			_, getMessage, _ := sock.ReadMessage()
-			s.Require().Equal("[\"Hello, world!\"]", string(getMessage))
+
+			testMessage.Destination = ids[ind]
+
+			messages := make([]Message, 0)
+			json.Unmarshal(getMessage, &messages)
+
+			s.Require().Equal(testMessage, messages[0])
 		}
 
 	})

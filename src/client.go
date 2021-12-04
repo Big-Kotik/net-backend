@@ -36,12 +36,12 @@ type Client struct {
 
 	conn *websocket.Conn
 
-	send chan []byte
+	send chan Message
 
 	id string
 }
 
-func (c *Client) GetSendChan() *chan []byte {
+func (c *Client) GetSendChan() *chan Message {
 	return &c.send
 }
 
@@ -99,18 +99,21 @@ func (c *Client) writePump() {
 				return
 			}
 			n := len(c.send)
-			messages := make([]string, n+1)
-			messages[0] = string(message)
+			messages := make([]Message, n+1)
 
+			messages[0] = message
 			for i := 1; i < n+1; i++ {
-				messages[i] = string(<-c.send)
+				messages[i] = <-c.send
 			}
+
 			messageJson, _ := json.Marshal(messages)
 			w.Write(messageJson)
+
 			if err := w.Close(); err != nil {
 				log.Fatal("err")
 				return
 			}
+
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {

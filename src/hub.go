@@ -5,8 +5,9 @@ import (
 )
 
 type Message struct {
-	Id      string `json:"id"`
-	Message string `json:"message"`
+	Destination string `json:"destination"`
+	Source      string `json:"source"`
+	Message     string `json:"message"`
 }
 
 type void struct {
@@ -15,7 +16,7 @@ type void struct {
 type Hub struct {
 	clients map[HubWriter]void
 
-	rooms map[string]HubWriter
+	writers map[string]HubWriter
 
 	broadcast chan Message
 
@@ -30,7 +31,7 @@ func newHub() *Hub {
 		register:   make(chan HubWriter),
 		unregister: make(chan HubWriter),
 		clients:    make(map[HubWriter]void),
-		rooms:      make(map[string]HubWriter),
+		writers:    make(map[string]HubWriter),
 	}
 }
 
@@ -39,21 +40,21 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = void{}
-			h.rooms[client.GetId()] = client
+			h.writers[client.GetId()] = client
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				delete(h.rooms, client.GetId())
+				delete(h.writers, client.GetId())
 				close(*client.GetSendChan())
 			}
 		case message := <-h.broadcast:
-			if client, err := h.rooms[message.Id]; err {
+			if client, err := h.writers[message.Destination]; err {
 				select {
-				case *client.GetSendChan() <- []byte(message.Message):
+				case *client.GetSendChan() <- message:
 				default:
 					close(*client.GetSendChan())
 					delete(h.clients, client)
-					delete(h.rooms, message.Id)
+					delete(h.writers, message.Destination)
 				}
 			} else {
 				log.Println("No such channel")

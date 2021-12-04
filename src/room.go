@@ -6,7 +6,7 @@ type Room struct {
 	hub     *Hub
 	id      string
 	usersId []string
-	send    chan []byte
+	send    chan Message
 }
 
 func (r *Room) writePump() {
@@ -17,17 +17,14 @@ func (r *Room) writePump() {
 				log.Println("Room was deleted")
 			}
 			for _, id := range r.usersId {
-				user, ok := r.hub.rooms[id]
-				if !ok {
-					log.Printf("User: %s, not connected\n", id)
-				}
-				*user.GetSendChan() <- message
+				message.Destination = id
+				r.hub.broadcast <- message
 			}
 		}
 	}
 }
 
-func (r *Room) GetSendChan() *chan []byte {
+func (r *Room) GetSendChan() *chan Message {
 	return &r.send
 }
 

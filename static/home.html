@@ -5,6 +5,7 @@
     <script type="text/javascript">
         window.onload = function () {
             let conn;
+            let addr = "none"
             const msg = document.getElementById("msg");
             const id = document.getElementById("id");
             const log = document.getElementById("log");
@@ -34,7 +35,8 @@
                 }))
                 conn.send(JSON.stringify({
                     message: msg.value,
-                    id: id.value,
+                    destination: id.value,
+                    source: addr,
                 }));
                 msg.value = "";
                 return false;
@@ -49,10 +51,16 @@
                     appendLog(item);
                 };
                 conn.onmessage = function (evt) {
-                    var messages = evt.data.split('\n');
+                    var messages = JSON.parse(evt.data);
+                    if (addr === "none") {
+                        let item = document.createElement("div");
+                        addr = messages[0].destination
+                        item.innerText = addr
+                        appendLog(item);
+                    }
                     for (var i = 0; i < messages.length; i++) {
-                        var item = document.createElement("div");
-                        item.innerText = messages[i];
+                        let item = document.createElement("div");
+                        item.innerText = messages[i].message;
                         appendLog(item);
                     }
                 };
