@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/suite"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,8 +24,6 @@ func Test(t *testing.T) {
 
 type APISuite struct {
 	suite.Suite
-
-	cl http.Client
 }
 
 func (s *APISuite) SetupSuite() {
@@ -39,7 +37,7 @@ func (s *APISuite) SetupSuite() {
 }
 
 func (s *APISuite) TestWebSockets() {
-	parseId := func(message []byte) string {
+	parseID := func(message []byte) string {
 		idSlice := make([]Message, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
@@ -50,7 +48,7 @@ func (s *APISuite) TestWebSockets() {
 	}
 
 	s.Run("two sockets test", func() {
-		u := url.URL{Scheme: "ws", Host: servAddr, Path: "/ws"}
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsEndpoint}
 
 		firstSocket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {
@@ -77,15 +75,19 @@ func (s *APISuite) TestWebSockets() {
 			s.Require().Failf("Can't read message", "fail with error: %v", err)
 		}
 
-		firstId := parseId(firstMessage)
-		secondId := parseId(secondMessage)
+		firstID := parseID(firstMessage)
+		secondID := parseID(secondMessage)
 
-		s.Require().NotEqual(firstId, secondId)
+		s.Require().NotEqual(firstID, secondID)
 
-		testMessage := Message{firstId, secondId, "Hello, world!"}
+		testMessage := Message{firstID, secondID, "Hello, world!"}
 		secondSocket.WriteJSON(testMessage)
 
 		_, getMessage, err := firstSocket.ReadMessage()
+
+		if err != nil {
+			s.Fail("Error", "err: %v", err)
+		}
 
 		messages := make([]Message, 0)
 		json.Unmarshal(getMessage, &messages)
@@ -95,7 +97,7 @@ func (s *APISuite) TestWebSockets() {
 }
 
 func (s *APISuite) TestRooms() {
-	parseId := func(message []byte) string {
+	parseID := func(message []byte) string {
 		idSlice := make([]Message, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
@@ -105,7 +107,7 @@ func (s *APISuite) TestRooms() {
 		return idSlice[0].Destination
 	}
 	s.Run("Test writers", func() {
-		u := url.URL{Scheme: "ws", Host: servAddr, Path: "/ws"}
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsEndpoint}
 		sockets := make([]*websocket.Conn, 5)
 		ids := make([]string, 5)
 
@@ -121,7 +123,7 @@ func (s *APISuite) TestRooms() {
 			if err != nil {
 				s.Require().Failf("Can't read message", "fail with error: %v", err)
 			}
-			ids[i] = parseId(message)
+			ids[i] = parseID(message)
 		}
 		defer func() {
 			for _, sock := range sockets {
@@ -143,14 +145,14 @@ func (s *APISuite) TestRooms() {
 			s.Require().Failf("Fail to create room", "fail with error: %v", err)
 			return
 		}
-		data, err = ioutil.ReadAll(response.Body)
+		data, err = io.ReadAll(response.Body)
 		if err != nil {
 			s.Require().Failf("Fail to read response", "fail with error: %v", err)
 			return
 		}
-		roomId := string(data)
+		roomID := string(data)
 
-		testMessage := Message{roomId, ids[0], "Hello, world!"}
+		testMessage := Message{roomID, ids[0], "Hello, world!"}
 		sockets[0].WriteJSON(testMessage)
 
 		for ind, sock := range sockets {

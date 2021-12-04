@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func getId() string {
+func getID() string {
 	h := sha256.New()
 	h.Write([]byte(strconv.Itoa(time.Now().Nanosecond())))
 	return hex.EncodeToString(h.Sum(nil))

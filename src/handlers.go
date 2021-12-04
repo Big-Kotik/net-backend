@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 )
@@ -27,7 +27,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := getId()
+	id := getID()
 
 	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), id: id}
 	client.hub.register <- client
@@ -44,7 +44,7 @@ func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ids := make([]string, 0)
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 
 	if err != nil {
 		http.Error(w, "No body", http.StatusBadRequest)
@@ -58,12 +58,16 @@ func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := getId()
-	room := &Room{hub: hub, id: id, usersId: ids, send: make(chan Message)}
+	id := getID()
+	room := &Room{hub: hub, id: id, usersID: ids, send: make(chan Message)}
 
 	hub.register <- room
 
 	go room.writePump()
 
-	w.Write([]byte(id))
+	_, err = w.Write([]byte(id))
+	if err != nil {
+		log.Printf("err: %v", err)
+		return
+	}
 }

@@ -25,10 +25,6 @@ func newServer() *http.Server {
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(hub, w, r)
 	})
-	//err := http.ListenAndServe(*addr, nil)
-	//if err != nil {
-	//	log.Fatal("ListenAndServe: ", err)
-	//}
 
 	return &http.Server{
 		Handler:      r,

@@ -4,6 +4,7 @@ import (
 	"log"
 )
 
+// Message struct for net message
 type Message struct {
 	Destination string `json:"destination"`
 	Source      string `json:"source"`
@@ -13,6 +14,7 @@ type Message struct {
 type void struct {
 }
 
+// Hub struct for message broadcasting
 type Hub struct {
 	clients map[HubWriter]void
 
@@ -40,19 +42,19 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = void{}
-			h.writers[client.GetId()] = client
+			h.writers[client.GetID()] = client
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				delete(h.writers, client.GetId())
-				close(*client.GetSendChan())
+				delete(h.writers, client.GetID())
+				close(client.GetSendChan())
 			}
 		case message := <-h.broadcast:
 			if client, err := h.writers[message.Destination]; err {
 				select {
-				case *client.GetSendChan() <- message:
+				case client.GetSendChan() <- message:
 				default:
-					close(*client.GetSendChan())
+					close(client.GetSendChan())
 					delete(h.clients, client)
 					delete(h.writers, message.Destination)
 				}
