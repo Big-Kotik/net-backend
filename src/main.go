@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-var addr = flag.String("addr", ":8080", "http service address")
+var port = flag.String("port", ":8080", "http service port")
 
 func newServer() *http.Server {
 	r := mux.NewRouter()
@@ -32,7 +32,7 @@ func newServer() *http.Server {
 
 	return &http.Server{
 		Handler:      r,
-		Addr:         "0.0.0.0:8080",
+		Addr:         "0.0.0.0" + *port,
 		WriteTimeout: writeWait,
 		ReadTimeout:  writeWait,
 	}
