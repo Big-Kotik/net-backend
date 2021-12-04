@@ -53,11 +53,14 @@
                 conn.onmessage = function (evt) {
                     var messages = JSON.parse(evt.data);
                     if (addr === "none") {
-                        addr = messages[0]
+                        let item = document.createElement("div");
+                        addr = messages[0].destination
+                        item.innerText = addr
+                        appendLog(item);
                     }
                     for (var i = 0; i < messages.length; i++) {
-                        var item = document.createElement("div");
-                        item.innerText = messages[i];
+                        let item = document.createElement("div");
+                        item.innerText = messages[i].message;
                         appendLog(item);
                     }
                 };

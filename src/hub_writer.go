@@ -1,6 +1,6 @@
 package main
 
 type HubWriter interface {
-	GetSendChan() *chan []byte
+	GetSendChan() *chan Message
 	GetId() string
 }

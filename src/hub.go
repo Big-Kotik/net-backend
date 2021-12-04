@@ -50,7 +50,7 @@ func (h *Hub) run() {
 		case message := <-h.broadcast:
 			if client, err := h.writers[message.Destination]; err {
 				select {
-				case *client.GetSendChan() <- []byte(message.Message):
+				case *client.GetSendChan() <- message:
 				default:
 					close(*client.GetSendChan())
 					delete(h.clients, client)

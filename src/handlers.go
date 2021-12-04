@@ -29,10 +29,10 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	id := getId()
 
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), id: id}
+	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), id: id}
 	client.hub.register <- client
 
-	client.send <- []byte(id)
+	client.send <- Message{Destination: id, Source: "server", Message: "Success"}
 
 	go client.writePump()
 	go client.readPump()
@@ -59,7 +59,7 @@ func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := getId()
-	room := &Room{hub: hub, id: id, usersId: ids, send: make(chan []byte)}
+	room := &Room{hub: hub, id: id, usersId: ids, send: make(chan Message)}
 
 	hub.register <- room
 
