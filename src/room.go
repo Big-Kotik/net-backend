@@ -4,10 +4,10 @@ import "log"
 
 // Room struct for rooms support
 type Room struct {
-	hub     *Hub
+	hub     Hub
 	id      string
 	usersID []string
-	send    chan Message
+	send    chan ClientMessage
 }
 
 func (r *Room) writePump() {
@@ -18,13 +18,13 @@ func (r *Room) writePump() {
 		}
 		for _, id := range r.usersID {
 			message.Destination = id
-			r.hub.broadcast <- message
+			r.hub.SendMessage(message)
 		}
 	}
 }
 
 // GetSendChan implementation of HubWriter.GetSendChan()
-func (r *Room) GetSendChan() chan Message {
+func (r *Room) GetSendChan() chan ClientMessage {
 	return r.send
 }
 

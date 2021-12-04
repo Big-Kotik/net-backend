@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	servAddr   = "0.0.0.0:8080"
-	wsEndpoint = "/ws"
+	servAddr         = "0.0.0.0:8080"
+	wsClientEndpoint = "/ws/client"
 )
 
 func Test(t *testing.T) {
@@ -38,7 +38,7 @@ func (s *APISuite) SetupSuite() {
 
 func (s *APISuite) TestWebSockets() {
 	parseID := func(message []byte) string {
-		idSlice := make([]Message, 0)
+		idSlice := make([]ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
 			s.Require().Failf("Can't parse message", "fail with error: %v", err)
@@ -48,7 +48,7 @@ func (s *APISuite) TestWebSockets() {
 	}
 
 	s.Run("two sockets test", func() {
-		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsEndpoint}
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsClientEndpoint}
 
 		firstSocket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {
@@ -80,7 +80,7 @@ func (s *APISuite) TestWebSockets() {
 
 		s.Require().NotEqual(firstID, secondID)
 
-		testMessage := Message{firstID, secondID, "Hello, world!"}
+		testMessage := ClientMessage{firstID, secondID, "Hello, world!"}
 		secondSocket.WriteJSON(testMessage)
 
 		_, getMessage, err := firstSocket.ReadMessage()
@@ -89,7 +89,7 @@ func (s *APISuite) TestWebSockets() {
 			s.Fail("Error", "err: %v", err)
 		}
 
-		messages := make([]Message, 0)
+		messages := make([]ClientMessage, 0)
 		json.Unmarshal(getMessage, &messages)
 
 		s.Require().Equal(testMessage, messages[0])
@@ -98,7 +98,7 @@ func (s *APISuite) TestWebSockets() {
 
 func (s *APISuite) TestRooms() {
 	parseID := func(message []byte) string {
-		idSlice := make([]Message, 0)
+		idSlice := make([]ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
 			s.Require().Failf("Can't parse message", "fail with error: %v", err)
@@ -107,7 +107,7 @@ func (s *APISuite) TestRooms() {
 		return idSlice[0].Destination
 	}
 	s.Run("Test writers", func() {
-		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsEndpoint}
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsClientEndpoint}
 		sockets := make([]*websocket.Conn, 5)
 		ids := make([]string, 5)
 
@@ -152,7 +152,7 @@ func (s *APISuite) TestRooms() {
 		}
 		roomID := string(data)
 
-		testMessage := Message{roomID, ids[0], "Hello, world!"}
+		testMessage := ClientMessage{roomID, ids[0], "Hello, world!"}
 		sockets[0].WriteJSON(testMessage)
 
 		for ind, sock := range sockets {
@@ -160,7 +160,7 @@ func (s *APISuite) TestRooms() {
 
 			testMessage.Destination = ids[ind]
 
-			messages := make([]Message, 0)
+			messages := make([]ClientMessage, 0)
 			json.Unmarshal(getMessage, &messages)
 
 			s.Require().Equal(testMessage, messages[0])

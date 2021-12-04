@@ -2,65 +2,95 @@ package main
 
 import (
 	"log"
+	"sync"
 )
-
-// Message struct for net message
-type Message struct {
-	Destination string `json:"destination"`
-	Source      string `json:"source"`
-	Message     string `json:"message"`
-}
 
 type void struct {
 }
 
-// Hub struct for message broadcasting
-type Hub struct {
+type hub struct {
+	mx sync.RWMutex
+
+	hubID string
+
 	clients map[HubWriter]void
 
 	writers map[string]HubWriter
 
-	broadcast chan Message
-
-	register chan HubWriter
-
-	unregister chan HubWriter
+	broadcast chan ClientMessage
 }
 
-func newHub() *Hub {
-	return &Hub{
-		broadcast:  make(chan Message),
-		register:   make(chan HubWriter),
-		unregister: make(chan HubWriter),
-		clients:    make(map[HubWriter]void),
-		writers:    make(map[string]HubWriter),
-	}
+var (
+	once        sync.Once
+	hubInstance hub
+)
+
+// Hub interface for singleton hub struct
+type Hub interface {
+	GetID() string
+	SendMessage(message ClientMessage)
+	Register(client HubWriter)
+	Unregister(client HubWriter)
+	ContainsID(id string) bool
 }
 
-func (h *Hub) run() {
+func (h *hub) GetID() string {
+	return h.hubID
+}
+
+func (h *hub) SendMessage(message ClientMessage) {
+	h.broadcast <- message
+}
+
+func (h *hub) Register(client HubWriter) {
+	h.mx.Lock()
+	defer h.mx.Unlock()
+	h.clients[client] = void{}
+	h.writers[client.GetID()] = client
+}
+
+func (h *hub) Unregister(client HubWriter) {
+	h.mx.Lock()
+	defer h.mx.Unlock()
+	delete(h.clients, client)
+	delete(h.writers, client.GetID())
+	close(client.GetSendChan())
+}
+
+func (h *hub) ContainsID(id string) bool {
+	h.mx.RLock()
+	defer h.mx.RUnlock()
+	_, ok := h.writers[id]
+	return ok
+}
+
+func (h *hub) run() {
 	for {
-		select {
-		case client := <-h.register:
-			h.clients[client] = void{}
-			h.writers[client.GetID()] = client
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				delete(h.writers, client.GetID())
+		message := <-h.broadcast
+		if client, err := h.writers[message.Destination]; err {
+			select {
+			case client.GetSendChan() <- message:
+			default:
 				close(client.GetSendChan())
+				delete(h.clients, client)
+				delete(h.writers, message.Destination)
 			}
-		case message := <-h.broadcast:
-			if client, err := h.writers[message.Destination]; err {
-				select {
-				case client.GetSendChan() <- message:
-				default:
-					close(client.GetSendChan())
-					delete(h.clients, client)
-					delete(h.writers, message.Destination)
-				}
-			} else {
-				log.Println("No such channel")
-			}
+		} else {
+			log.Println("No such channel")
 		}
 	}
+}
+
+// GetHub return Hub object
+func GetHub() Hub {
+	once.Do(func() {
+		hubInstance = hub{
+			hubID:     getID(),
+			broadcast: make(chan ClientMessage),
+			clients:   make(map[HubWriter]void),
+			writers:   make(map[string]HubWriter),
+		}
+		go hubInstance.run()
+	})
+	return &hubInstance
 }

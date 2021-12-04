@@ -20,7 +20,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "./static/home.html")
 }
 
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveClientWs(hub Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -29,16 +29,16 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	id := getID()
 
-	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), id: id}
-	client.hub.register <- client
+	client := &Client{hub: hub, conn: conn, send: make(chan ClientMessage, 256), id: id}
+	client.hub.Register(client)
 
-	client.send <- Message{Destination: id, Source: "server", Message: "Success"}
+	client.send <- ClientMessage{Destination: id, Source: hub.GetID(), Message: "Success"}
 
 	go client.writePump()
 	go client.readPump()
 }
 
-func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveRoom(hub Hub, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -59,9 +59,9 @@ func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := getID()
-	room := &Room{hub: hub, id: id, usersID: ids, send: make(chan Message)}
+	room := &Room{hub: hub, id: id, usersID: ids, send: make(chan ClientMessage)}
 
-	hub.register <- room
+	hub.Register(room)
 
 	go room.writePump()
 

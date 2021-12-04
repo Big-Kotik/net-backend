@@ -33,17 +33,17 @@ var upgrader = websocket.Upgrader{
 
 // Client struct for client
 type Client struct {
-	hub *Hub
+	hub Hub
 
 	conn *websocket.Conn
 
-	send chan Message
+	send chan ClientMessage
 
 	id string
 }
 
 // GetSendChan implementation of HubWriter.GetSendChan()
-func (c *Client) GetSendChan() chan Message {
+func (c *Client) GetSendChan() chan ClientMessage {
 	return c.send
 }
 
@@ -54,7 +54,7 @@ func (c *Client) GetID() string {
 
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		c.hub.Unregister(c)
 		err := c.conn.Close()
 		if err != nil {
 			return
@@ -78,7 +78,7 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		var message Message
+		var message ClientMessage
 		err = json.Unmarshal(messageBytes, &message)
 
 		if err != nil {
@@ -87,7 +87,7 @@ func (c *Client) readPump() {
 			break
 		}
 
-		c.hub.broadcast <- message
+		c.hub.SendMessage(message)
 	}
 }
 
@@ -124,7 +124,7 @@ func (c *Client) writePump() {
 				return
 			}
 			n := len(c.send)
-			messages := make([]Message, n+1)
+			messages := make([]ClientMessage, n+1)
 
 			messages[0] = message
 			for i := 1; i < n+1; i++ {
