@@ -17,7 +17,7 @@ func (r *Room) writePump() {
 				log.Println("Room was deleted")
 			}
 			for _, id := range r.usersId {
-				user, ok := r.hub.rooms[id]
+				user, ok := r.hub.writers[id]
 				if !ok {
 					log.Printf("User: %s, not connected\n", id)
 				}

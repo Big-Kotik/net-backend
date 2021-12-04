@@ -81,7 +81,7 @@ func (s *APISuite) TestWebSockets() {
 
 		s.Require().NotEqual(firstId, secondId)
 
-		secondSocket.WriteJSON(Message{firstId, "Hello, world!"})
+		secondSocket.WriteJSON(Message{firstId, secondId, "Hello, world!"})
 
 		_, getMessage, err := firstSocket.ReadMessage()
 
@@ -98,7 +98,7 @@ func (s *APISuite) TestRooms() {
 		}
 		return idSlice[0]
 	}
-	s.Run("Test rooms", func() {
+	s.Run("Test writers", func() {
 		u := url.URL{Scheme: "ws", Host: servAddr, Path: "/ws"}
 		sockets := make([]*websocket.Conn, 5)
 		ids := make([]string, 5)
@@ -144,7 +144,7 @@ func (s *APISuite) TestRooms() {
 		}
 		roomId := string(data)
 
-		sockets[0].WriteJSON(Message{roomId, "Hello, world!"})
+		sockets[0].WriteJSON(Message{roomId, ids[0], "Hello, world!"})
 
 		for _, sock := range sockets {
 			_, getMessage, _ := sock.ReadMessage()
