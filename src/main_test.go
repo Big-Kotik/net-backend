@@ -107,7 +107,7 @@ func (s *APISuite) TestRooms() {
 			var err error
 			sockets[i], _, err = websocket.DefaultDialer.Dial(u.String(), nil)
 			if err != nil {
-				s.Require().Failf("Can't create socket", "fail with error: %v", err)
+				s.Require().Failf("Can't create socket", "Socket %d, fail with error: %v", i, err)
 			}
 			sockets[i].SetReadDeadline(time.Now().Add(pongWait))
 
