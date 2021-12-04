@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -26,6 +26,9 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 type Client struct {
@@ -36,6 +39,14 @@ type Client struct {
 	send chan []byte
 
 	id string
+}
+
+func (c *Client) GetSendChan() *chan []byte {
+	return &c.send
+}
+
+func (c *Client) GetId() string {
+	return c.id
 }
 
 func (c *Client) readPump() {
@@ -57,7 +68,6 @@ func (c *Client) readPump() {
 		var message Message
 		err = json.Unmarshal(messageBytes, &message)
 
-		fmt.Println(message)
 		if err != nil {
 			log.Printf("error: %v", err)
 			log.Printf("can't parse to json")
@@ -71,17 +81,14 @@ func (c *Client) readPump() {
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
-		log.Println("Close connection")
 		ticker.Stop()
 		c.conn.Close()
 	}()
 	for {
 		select {
 		case message, ok := <-c.send:
-			log.Println(message)
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				log.Println("Hub close channel")
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -92,10 +99,10 @@ func (c *Client) writePump() {
 				return
 			}
 			n := len(c.send)
-			messages := make([]string, n + 1)
+			messages := make([]string, n+1)
 			messages[0] = string(message)
 
-			for i := 1; i < n + 1; i++ {
+			for i := 1; i < n+1; i++ {
 				messages[i] = string(<-c.send)
 			}
 			messageJson, _ := json.Marshal(messages)

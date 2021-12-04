@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/suite"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -17,7 +19,6 @@ var (
 )
 
 func Test(t *testing.T) {
-	log.Println("test started")
 	suite.Run(t, &APISuite{})
 }
 
@@ -29,53 +30,126 @@ type APISuite struct {
 
 func (s *APISuite) SetupSuite() {
 	srv := newServer()
-	log.Println("setup start")
+
+	time.Sleep(1000 * time.Millisecond)
+
 	go func() {
-		log.Println("test server started")
 		log.Fatal(srv.ListenAndServe())
 	}()
-	log.Println("setup end")
 }
 
 func (s *APISuite) TestWebSockets() {
-	log.Println("two sockets test start")
+	parseId := func(message []byte) string {
+		idSlice := make([]string, 0)
+		err := json.Unmarshal(message, &idSlice)
+		if err != nil {
+			s.Require().Failf("Can't parse message", "fail with error: %v", err)
+		}
+		return idSlice[0]
+	}
+
 	s.Run("two sockets test", func() {
 		u := url.URL{Scheme: "ws", Host: servAddr, Path: "/ws"}
-		firstSocket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-		secondSocket, _, _ := websocket.DefaultDialer.Dial(u.String(), nil)
 
+		firstSocket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {
-			log.Println(u.String())
-			log.Println(err)
-			s.Require().Fail("can't create socket")
+			s.Require().Failf("Can't create socket", "fail with error: %v", err)
+		}
+
+		secondSocket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		if err != nil {
+			s.Require().Failf("Can't create socket", "fail with error: %v", err)
 		}
 
 		defer firstSocket.Close()
 		defer secondSocket.Close()
 		firstSocket.SetReadDeadline(time.Now().Add(pongWait))
-		_, firstMessage, e1 := firstSocket.ReadMessage()
-		_, secondMessage, e2 := secondSocket.ReadMessage()
+		secondSocket.SetReadDeadline(time.Now().Add(pongWait))
 
-		if e1 != nil || e2 != nil {
-			log.Fatal("read message error")
-			s.Fail("can't read message")
+		_, firstMessage, err := firstSocket.ReadMessage()
+		if err != nil {
+			s.Require().Failf("Can't read message", "fail with error: %v", err)
 		}
 
-		var firstId string
-		var secondId string
-		firstIdSlice := make([]string, 0)
-		parseErr := json.Unmarshal(firstMessage, &firstIdSlice)
-		log.Println(parseErr)
-		s.Require().Equal(parseErr, nil)
-		firstId = firstIdSlice[0]
-		secondId = string(secondMessage)
+		_, secondMessage, err := secondSocket.ReadMessage()
+		if err != nil {
+			s.Require().Failf("Can't read message", "fail with error: %v", err)
+		}
+
+		firstId := parseId(firstMessage)
+		secondId := parseId(secondMessage)
 
 		s.Require().NotEqual(firstId, secondId)
 
-		secondSocket.WriteJSON(Message{firstId, "abcd"})
+		secondSocket.WriteJSON(Message{firstId, "Hello, world!"})
 
 		_, getMessage, err := firstSocket.ReadMessage()
 
-		s.Require().Equal("[\"abcd\"]", string(getMessage))
+		s.Require().Equal("[\"Hello, world!\"]", string(getMessage))
+	})
+}
+
+func (s *APISuite) TestRooms() {
+	parseId := func(message []byte) string {
+		idSlice := make([]string, 0)
+		err := json.Unmarshal(message, &idSlice)
+		if err != nil {
+			s.Require().Failf("Can't parse message", "fail with error: %v", err)
+		}
+		return idSlice[0]
+	}
+	s.Run("Test rooms", func() {
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: "/ws"}
+		sockets := make([]*websocket.Conn, 5)
+		ids := make([]string, 5)
+
+		for i := range sockets {
+			var err error
+			sockets[i], _, err = websocket.DefaultDialer.Dial(u.String(), nil)
+			if err != nil {
+				s.Require().Failf("Can't create socket", "fail with error: %v", err)
+			}
+			sockets[i].SetReadDeadline(time.Now().Add(pongWait))
+
+			_, message, err := sockets[i].ReadMessage()
+			if err != nil {
+				s.Require().Failf("Can't read message", "fail with error: %v", err)
+			}
+			ids[i] = parseId(message)
+		}
+		defer func() {
+			for _, sock := range sockets {
+				sock.Close()
+			}
+		}()
+
+		makeRoom := url.URL{Scheme: "http", Host: servAddr, Path: "/create_room"}
+		data, _ := json.Marshal(ids)
+		request, err := http.NewRequest("POST", makeRoom.String(), strings.NewReader(string(data)))
+		if err != nil {
+			s.Require().Failf("Can't create request", "fail with error: %v", err)
+			return
+		}
+
+		client := &http.Client{}
+		response, err := client.Do(request)
+		if err != nil {
+			s.Require().Failf("Fail to create room", "fail with error: %v", err)
+			return
+		}
+		data, err = ioutil.ReadAll(response.Body)
+		if err != nil {
+			s.Require().Failf("Fail to read response", "fail with error: %v", err)
+			return
+		}
+		roomId := string(data)
+
+		sockets[0].WriteJSON(Message{roomId, "Hello, world!"})
+
+		for _, sock := range sockets {
+			_, getMessage, _ := sock.ReadMessage()
+			s.Require().Equal("[\"Hello, world!\"]", string(getMessage))
+		}
+
 	})
 }
