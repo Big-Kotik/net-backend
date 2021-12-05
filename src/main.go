@@ -20,6 +20,7 @@ func newServer() *http.Server {
 	r.HandleFunc("/create_room", func(writer http.ResponseWriter, request *http.Request) {
 		serveRoom(hub, writer, request)
 	})
+	r.Path("/check_id").Methods("GET").Queries("id", "{id}").HandlerFunc(serveCheckIDExist)
 	r.HandleFunc("/ws/client", func(w http.ResponseWriter, r *http.Request) {
 		serveClientWs(hub, w, r)
 	})

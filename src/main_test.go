@@ -16,6 +16,7 @@ import (
 var (
 	servAddr         = "0.0.0.0:8080"
 	wsClientEndpoint = "/ws/client"
+	checkIDEndpoint  = "/check_id"
 )
 
 func Test(t *testing.T) {
@@ -100,9 +101,7 @@ func (s *APISuite) TestRooms() {
 	parseID := func(message []byte) string {
 		idSlice := make([]ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
-		if err != nil {
-			s.Require().Failf("Can't parse message", "fail with error: %v", err)
-		}
+		s.NoErrorf(err, "Fail err %v", err)
 		s.Require().Equal("Success", idSlice[0].Message)
 		return idSlice[0].Destination
 	}
@@ -114,15 +113,10 @@ func (s *APISuite) TestRooms() {
 		for i := range sockets {
 			var err error
 			sockets[i], _, err = websocket.DefaultDialer.Dial(u.String(), nil)
-			if err != nil {
-				s.Require().Failf("Can't create socket", "Socket %d, fail with error: %v", i, err)
-			}
+			s.NoErrorf(err, "Socket %d, fail with error: %v", i, err)
 			sockets[i].SetReadDeadline(time.Now().Add(pongWait))
-
 			_, message, err := sockets[i].ReadMessage()
-			if err != nil {
-				s.Require().Failf("Can't read message", "fail with error: %v", err)
-			}
+			s.NoErrorf(err, "fail with error: %v", err)
 			ids[i] = parseID(message)
 		}
 		defer func() {
@@ -166,5 +160,48 @@ func (s *APISuite) TestRooms() {
 			s.Require().Equal(testMessage, messages[0])
 		}
 
+	})
+}
+
+func (s *APISuite) TestUserExist() {
+	parseID := func(message []byte) string {
+		idSlice := make([]ClientMessage, 0)
+		err := json.Unmarshal(message, &idSlice)
+		s.NoErrorf(err, "Fail err %v", err)
+		s.Require().Equal("Success", idSlice[0].Message)
+		return idSlice[0].Destination
+	}
+	s.Run("Test /check_id", func() {
+		wsURL := url.URL{Scheme: "ws", Host: servAddr, Path: wsClientEndpoint}
+		socket, _, err := websocket.DefaultDialer.Dial(wsURL.String(), nil)
+		s.NoError(err)
+		defer socket.Close()
+
+		socket.SetReadDeadline(time.Now().Add(pongWait))
+		_, message, err := socket.ReadMessage()
+		s.NoError(err)
+		id := parseID(message)
+
+		checkURL := url.URL{
+			Scheme:   "http",
+			Host:     servAddr,
+			Path:     checkIDEndpoint,
+			RawQuery: "id=" + id,
+		}
+
+		request, err := http.NewRequest("GET", checkURL.String(), strings.NewReader(""))
+		s.NoError(err)
+		client := &http.Client{}
+		response, err := client.Do(request)
+		s.NoError(err)
+		s.Equal(http.StatusOK, response.StatusCode)
+		err = socket.Close()
+		s.NoError(err)
+
+		request, err = http.NewRequest("GET", checkURL.String(), strings.NewReader(""))
+		s.NoError(err)
+		response, err = client.Do(request)
+		s.NoError(err)
+		s.Equal(http.StatusNotFound, response.StatusCode)
 	})
 }

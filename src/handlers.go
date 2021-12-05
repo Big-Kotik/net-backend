@@ -20,6 +20,20 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "./static/home.html")
 }
 
+func serveCheckIDExist(w http.ResponseWriter, r *http.Request) {
+	hub := GetHub()
+	id := r.URL.Query().Get("id")
+	if hub.ContainsID(id) {
+		_, err := w.Write([]byte("Ok"))
+		if err != nil {
+			http.Error(w, "Method crash", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		http.Error(w, "No such user", http.StatusNotFound)
+	}
+}
+
 func serveClientWs(hub Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
