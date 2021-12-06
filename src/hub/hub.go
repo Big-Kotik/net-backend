@@ -1,7 +1,9 @@
-package main
+package hub
 
 import (
 	"log"
+	"net-backend/src/msg"
+	"net-backend/src/security"
 	"sync"
 )
 
@@ -13,11 +15,11 @@ type hub struct {
 
 	hubID string
 
-	clients map[HubWriter]void
+	clients map[Client]void
 
-	writers map[string]HubWriter
+	writers map[string]Client
 
-	broadcast chan ClientMessage
+	broadcast chan msg.ClientMessage
 }
 
 var (
@@ -28,9 +30,9 @@ var (
 // Hub interface for singleton hub struct
 type Hub interface {
 	GetID() string
-	SendMessage(message ClientMessage)
-	Register(client HubWriter)
-	Unregister(client HubWriter)
+	SendMessage(message msg.ClientMessage)
+	Register(client Client)
+	Unregister(client Client)
 	ContainsID(id string) bool
 }
 
@@ -38,18 +40,18 @@ func (h *hub) GetID() string {
 	return h.hubID
 }
 
-func (h *hub) SendMessage(message ClientMessage) {
+func (h *hub) SendMessage(message msg.ClientMessage) {
 	h.broadcast <- message
 }
 
-func (h *hub) Register(client HubWriter) {
+func (h *hub) Register(client Client) {
 	h.mx.Lock()
 	defer h.mx.Unlock()
 	h.clients[client] = void{}
 	h.writers[client.GetID()] = client
 }
 
-func (h *hub) Unregister(client HubWriter) {
+func (h *hub) Unregister(client Client) {
 	h.mx.Lock()
 	defer h.mx.Unlock()
 	delete(h.clients, client)
@@ -66,14 +68,14 @@ func (h *hub) ContainsID(id string) bool {
 
 func (h *hub) run() {
 	for {
-		message := <-h.broadcast
-		if client, err := h.writers[message.Destination]; err {
+		clientMessage := <-h.broadcast
+		if client, err := h.writers[clientMessage.Destination]; err {
 			select {
-			case client.GetSendChan() <- message:
+			case client.GetSendChan() <- clientMessage:
 			default:
 				close(client.GetSendChan())
 				delete(h.clients, client)
-				delete(h.writers, message.Destination)
+				delete(h.writers, clientMessage.Destination)
 			}
 		} else {
 			log.Println("No such channel")
@@ -85,10 +87,10 @@ func (h *hub) run() {
 func GetHub() Hub {
 	once.Do(func() {
 		hubInstance = hub{
-			hubID:     getID(),
-			broadcast: make(chan ClientMessage),
-			clients:   make(map[HubWriter]void),
-			writers:   make(map[string]HubWriter),
+			hubID:     security.GetID(),
+			broadcast: make(chan msg.ClientMessage),
+			clients:   make(map[Client]void),
+			writers:   make(map[string]Client),
 		}
 		go hubInstance.run()
 	})

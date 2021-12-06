@@ -2,10 +2,23 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/gorilla/websocket"
 	"io"
 	"log"
+	"net-backend/src/hub"
+	"net-backend/src/msg"
+	"net-backend/src/security"
+	"net-backend/src/workers"
 	"net/http"
 )
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
@@ -21,9 +34,9 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveCheckIDExist(w http.ResponseWriter, r *http.Request) {
-	hub := GetHub()
+	h := hub.GetHub()
 	id := r.URL.Query().Get("id")
-	if hub.ContainsID(id) {
+	if h.ContainsID(id) {
 		_, err := w.Write([]byte("Ok"))
 		if err != nil {
 			http.Error(w, "Method crash", http.StatusInternalServerError)
@@ -34,25 +47,25 @@ func serveCheckIDExist(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serveClientWs(hub Hub, w http.ResponseWriter, r *http.Request) {
+func serveClientWs(h hub.Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	id := getID()
+	id := security.GetID()
 
-	client := &Client{hub: hub, conn: conn, send: make(chan ClientMessage, 256), id: id}
-	client.hub.Register(client)
+	client := &workers.Client{Hub: h, Conn: conn, Send: make(chan msg.ClientMessage, 256), ID: id}
+	client.Hub.Register(client)
 
-	client.send <- ClientMessage{Destination: id, Source: hub.GetID(), Message: "Success"}
+	client.Send <- msg.ClientMessage{Destination: id, Source: h.GetID(), Message: "Success"}
 
-	go client.writePump()
-	go client.readPump()
+	go client.WritePump()
+	go client.ReadPump()
 }
 
-func serveRoom(hub Hub, w http.ResponseWriter, r *http.Request) {
+func serveRoom(h hub.Hub, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -72,12 +85,12 @@ func serveRoom(hub Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := getID()
-	room := &Room{hub: hub, id: id, usersID: ids, send: make(chan ClientMessage)}
+	id := security.GetID()
+	room := &workers.Room{Hub: h, ID: id, UsersID: ids, Send: make(chan msg.ClientMessage)}
 
-	hub.Register(room)
+	h.Register(room)
 
-	go room.writePump()
+	go room.WritePump()
 
 	_, err = w.Write([]byte(id))
 	if err != nil {

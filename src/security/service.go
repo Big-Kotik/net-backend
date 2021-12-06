@@ -1,4 +1,4 @@
-package main
+package security
 
 import (
 	"crypto/sha256"
@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-func getID() string {
+// GetID return sha256 value
+func GetID() string {
 	h := sha256.New()
 	h.Write([]byte(strconv.Itoa(time.Now().Nanosecond())))
 	return hex.EncodeToString(h.Sum(nil))

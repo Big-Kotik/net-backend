@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/suite"
 	"io"
 	"log"
+	"net-backend/src/msg"
+	"net-backend/src/workers"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,10 +41,10 @@ func (s *APISuite) SetupSuite() {
 
 func (s *APISuite) TestWebSockets() {
 	parseID := func(message []byte) string {
-		idSlice := make([]ClientMessage, 0)
+		idSlice := make([]msg.ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
-			s.Require().Failf("Can't parse message", "fail with error: %v", err)
+			s.Require().Failf("Can't parse msg", "fail with error: %v", err)
 		}
 		s.Require().Equal("Success", idSlice[0].Message)
 		return idSlice[0].Destination
@@ -63,17 +65,17 @@ func (s *APISuite) TestWebSockets() {
 
 		defer firstSocket.Close()
 		defer secondSocket.Close()
-		firstSocket.SetReadDeadline(time.Now().Add(pongWait))
-		secondSocket.SetReadDeadline(time.Now().Add(pongWait))
+		firstSocket.SetReadDeadline(time.Now().Add(workers.PongWait))
+		secondSocket.SetReadDeadline(time.Now().Add(workers.PongWait))
 
 		_, firstMessage, err := firstSocket.ReadMessage()
 		if err != nil {
-			s.Require().Failf("Can't read message", "fail with error: %v", err)
+			s.Require().Failf("Can't read msg", "fail with error: %v", err)
 		}
 
 		_, secondMessage, err := secondSocket.ReadMessage()
 		if err != nil {
-			s.Require().Failf("Can't read message", "fail with error: %v", err)
+			s.Require().Failf("Can't read msg", "fail with error: %v", err)
 		}
 
 		firstID := parseID(firstMessage)
@@ -81,7 +83,7 @@ func (s *APISuite) TestWebSockets() {
 
 		s.Require().NotEqual(firstID, secondID)
 
-		testMessage := ClientMessage{firstID, secondID, "Hello, world!"}
+		testMessage := msg.ClientMessage{Destination: firstID, Source: secondID, Message: "Hello, world!"}
 		secondSocket.WriteJSON(testMessage)
 
 		_, getMessage, err := firstSocket.ReadMessage()
@@ -90,7 +92,7 @@ func (s *APISuite) TestWebSockets() {
 			s.Fail("Error", "err: %v", err)
 		}
 
-		messages := make([]ClientMessage, 0)
+		messages := make([]msg.ClientMessage, 0)
 		json.Unmarshal(getMessage, &messages)
 
 		s.Require().Equal(testMessage, messages[0])
@@ -99,7 +101,7 @@ func (s *APISuite) TestWebSockets() {
 
 func (s *APISuite) TestRooms() {
 	parseID := func(message []byte) string {
-		idSlice := make([]ClientMessage, 0)
+		idSlice := make([]msg.ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
 		s.NoErrorf(err, "Fail err %v", err)
 		s.Require().Equal("Success", idSlice[0].Message)
@@ -114,7 +116,7 @@ func (s *APISuite) TestRooms() {
 			var err error
 			sockets[i], _, err = websocket.DefaultDialer.Dial(u.String(), nil)
 			s.NoErrorf(err, "Socket %d, fail with error: %v", i, err)
-			sockets[i].SetReadDeadline(time.Now().Add(pongWait))
+			sockets[i].SetReadDeadline(time.Now().Add(workers.PongWait))
 			_, message, err := sockets[i].ReadMessage()
 			s.NoErrorf(err, "fail with error: %v", err)
 			ids[i] = parseID(message)
@@ -146,7 +148,7 @@ func (s *APISuite) TestRooms() {
 		}
 		roomID := string(data)
 
-		testMessage := ClientMessage{roomID, ids[0], "Hello, world!"}
+		testMessage := msg.ClientMessage{Destination: roomID, Source: ids[0], Message: "Hello, world!"}
 		sockets[0].WriteJSON(testMessage)
 
 		for ind, sock := range sockets {
@@ -154,7 +156,7 @@ func (s *APISuite) TestRooms() {
 
 			testMessage.Destination = ids[ind]
 
-			messages := make([]ClientMessage, 0)
+			messages := make([]msg.ClientMessage, 0)
 			json.Unmarshal(getMessage, &messages)
 
 			s.Require().Equal(testMessage, messages[0])
@@ -165,7 +167,7 @@ func (s *APISuite) TestRooms() {
 
 func (s *APISuite) TestUserExist() {
 	parseID := func(message []byte) string {
-		idSlice := make([]ClientMessage, 0)
+		idSlice := make([]msg.ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
 		s.NoErrorf(err, "Fail err %v", err)
 		s.Require().Equal("Success", idSlice[0].Message)
@@ -177,7 +179,7 @@ func (s *APISuite) TestUserExist() {
 		s.NoError(err)
 		defer socket.Close()
 
-		socket.SetReadDeadline(time.Now().Add(pongWait))
+		socket.SetReadDeadline(time.Now().Add(workers.PongWait))
 		_, message, err := socket.ReadMessage()
 		s.NoError(err)
 		id := parseID(message)
