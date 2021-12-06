@@ -9,10 +9,10 @@ import (
 
 var port = flag.String("port", ":8080", "http service port")
 
-type HubHandler func(http.ResponseWriter, *http.Request)
+// type for serve hub functions
 type ServeHandler func(Hub, http.ResponseWriter, *http.Request)
 
-func applyServeFunc(hub Hub, serve ServeHandler) HubHandler {
+func applyServeFunc(hub Hub, serve ServeHandler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) { serve(hub, writer, request) }
 }
 
