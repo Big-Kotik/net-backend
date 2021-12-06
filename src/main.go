@@ -9,6 +9,13 @@ import (
 
 var port = flag.String("port", ":8080", "http service port")
 
+type HubHandler func(http.ResponseWriter, *http.Request)
+type ServeHandler func(Hub, http.ResponseWriter, *http.Request)
+
+func applyServeFunc(hub Hub, serve ServeHandler) HubHandler {
+	return func(writer http.ResponseWriter, request *http.Request) { serve(hub, writer, request) }
+}
+
 func newServer() *http.Server {
 	r := mux.NewRouter()
 	debug := flag.Bool("debug", false, "run debug mode")
@@ -17,13 +24,9 @@ func newServer() *http.Server {
 	if *debug {
 		r.HandleFunc("/", serveHome)
 	}
-	r.HandleFunc("/create_room", func(writer http.ResponseWriter, request *http.Request) {
-		serveRoom(hub, writer, request)
-	})
+	r.HandleFunc("/create_room", applyServeFunc(hub, serveRoom))
 	r.Path("/check_id").Methods("GET").Queries("id", "{id}").HandlerFunc(serveCheckIDExist)
-	r.HandleFunc("/ws/client", func(w http.ResponseWriter, r *http.Request) {
-		serveClientWs(hub, w, r)
-	})
+	r.HandleFunc("/ws/client", applyServeFunc(hub, serveClientWs))
 
 	return &http.Server{
 		Handler:      r,
