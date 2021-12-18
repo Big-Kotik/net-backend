@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/suite"
 	"io"
 	"log"
+	"net-backend/src/msg"
+	"net-backend/src/workers"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,8 +16,9 @@ import (
 )
 
 var (
-	servAddr   = "0.0.0.0:8080"
-	wsEndpoint = "/ws"
+	servAddr         = "0.0.0.0:8080"
+	wsClientEndpoint = "/ws/client"
+	checkIDEndpoint  = "/check_id"
 )
 
 func Test(t *testing.T) {
@@ -38,17 +41,17 @@ func (s *APISuite) SetupSuite() {
 
 func (s *APISuite) TestWebSockets() {
 	parseID := func(message []byte) string {
-		idSlice := make([]Message, 0)
+		idSlice := make([]msg.ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
 		if err != nil {
-			s.Require().Failf("Can't parse message", "fail with error: %v", err)
+			s.Require().Failf("Can't parse msg", "fail with error: %v", err)
 		}
 		s.Require().Equal("Success", idSlice[0].Message)
 		return idSlice[0].Destination
 	}
 
 	s.Run("two sockets test", func() {
-		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsEndpoint}
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsClientEndpoint}
 
 		firstSocket, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {
@@ -62,17 +65,17 @@ func (s *APISuite) TestWebSockets() {
 
 		defer firstSocket.Close()
 		defer secondSocket.Close()
-		firstSocket.SetReadDeadline(time.Now().Add(pongWait))
-		secondSocket.SetReadDeadline(time.Now().Add(pongWait))
+		firstSocket.SetReadDeadline(time.Now().Add(workers.PongWait))
+		secondSocket.SetReadDeadline(time.Now().Add(workers.PongWait))
 
 		_, firstMessage, err := firstSocket.ReadMessage()
 		if err != nil {
-			s.Require().Failf("Can't read message", "fail with error: %v", err)
+			s.Require().Failf("Can't read msg", "fail with error: %v", err)
 		}
 
 		_, secondMessage, err := secondSocket.ReadMessage()
 		if err != nil {
-			s.Require().Failf("Can't read message", "fail with error: %v", err)
+			s.Require().Failf("Can't read msg", "fail with error: %v", err)
 		}
 
 		firstID := parseID(firstMessage)
@@ -80,7 +83,7 @@ func (s *APISuite) TestWebSockets() {
 
 		s.Require().NotEqual(firstID, secondID)
 
-		testMessage := Message{firstID, secondID, "Hello, world!"}
+		testMessage := msg.ClientMessage{Destination: firstID, Source: secondID, Message: "Hello, world!"}
 		secondSocket.WriteJSON(testMessage)
 
 		_, getMessage, err := firstSocket.ReadMessage()
@@ -89,7 +92,7 @@ func (s *APISuite) TestWebSockets() {
 			s.Fail("Error", "err: %v", err)
 		}
 
-		messages := make([]Message, 0)
+		messages := make([]msg.ClientMessage, 0)
 		json.Unmarshal(getMessage, &messages)
 
 		s.Require().Equal(testMessage, messages[0])
@@ -98,31 +101,24 @@ func (s *APISuite) TestWebSockets() {
 
 func (s *APISuite) TestRooms() {
 	parseID := func(message []byte) string {
-		idSlice := make([]Message, 0)
+		idSlice := make([]msg.ClientMessage, 0)
 		err := json.Unmarshal(message, &idSlice)
-		if err != nil {
-			s.Require().Failf("Can't parse message", "fail with error: %v", err)
-		}
+		s.NoErrorf(err, "Fail err %v", err)
 		s.Require().Equal("Success", idSlice[0].Message)
 		return idSlice[0].Destination
 	}
 	s.Run("Test writers", func() {
-		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsEndpoint}
+		u := url.URL{Scheme: "ws", Host: servAddr, Path: wsClientEndpoint}
 		sockets := make([]*websocket.Conn, 5)
 		ids := make([]string, 5)
 
 		for i := range sockets {
 			var err error
 			sockets[i], _, err = websocket.DefaultDialer.Dial(u.String(), nil)
-			if err != nil {
-				s.Require().Failf("Can't create socket", "Socket %d, fail with error: %v", i, err)
-			}
-			sockets[i].SetReadDeadline(time.Now().Add(pongWait))
-
+			s.NoErrorf(err, "Socket %d, fail with error: %v", i, err)
+			sockets[i].SetReadDeadline(time.Now().Add(workers.PongWait))
 			_, message, err := sockets[i].ReadMessage()
-			if err != nil {
-				s.Require().Failf("Can't read message", "fail with error: %v", err)
-			}
+			s.NoErrorf(err, "fail with error: %v", err)
 			ids[i] = parseID(message)
 		}
 		defer func() {
@@ -152,7 +148,7 @@ func (s *APISuite) TestRooms() {
 		}
 		roomID := string(data)
 
-		testMessage := Message{roomID, ids[0], "Hello, world!"}
+		testMessage := msg.ClientMessage{Destination: roomID, Source: ids[0], Message: "Hello, world!"}
 		sockets[0].WriteJSON(testMessage)
 
 		for ind, sock := range sockets {
@@ -160,11 +156,54 @@ func (s *APISuite) TestRooms() {
 
 			testMessage.Destination = ids[ind]
 
-			messages := make([]Message, 0)
+			messages := make([]msg.ClientMessage, 0)
 			json.Unmarshal(getMessage, &messages)
 
 			s.Require().Equal(testMessage, messages[0])
 		}
 
+	})
+}
+
+func (s *APISuite) TestUserExist() {
+	parseID := func(message []byte) string {
+		idSlice := make([]msg.ClientMessage, 0)
+		err := json.Unmarshal(message, &idSlice)
+		s.NoErrorf(err, "Fail err %v", err)
+		s.Require().Equal("Success", idSlice[0].Message)
+		return idSlice[0].Destination
+	}
+	s.Run("Test /check_id", func() {
+		wsURL := url.URL{Scheme: "ws", Host: servAddr, Path: wsClientEndpoint}
+		socket, _, err := websocket.DefaultDialer.Dial(wsURL.String(), nil)
+		s.NoError(err)
+		defer socket.Close()
+
+		socket.SetReadDeadline(time.Now().Add(workers.PongWait))
+		_, message, err := socket.ReadMessage()
+		s.NoError(err)
+		id := parseID(message)
+
+		checkURL := url.URL{
+			Scheme:   "http",
+			Host:     servAddr,
+			Path:     checkIDEndpoint,
+			RawQuery: "id=" + id,
+		}
+
+		request, err := http.NewRequest("GET", checkURL.String(), strings.NewReader(""))
+		s.NoError(err)
+		client := &http.Client{}
+		response, err := client.Do(request)
+		s.NoError(err)
+		s.Equal(http.StatusOK, response.StatusCode)
+		err = socket.Close()
+		s.NoError(err)
+
+		request, err = http.NewRequest("GET", checkURL.String(), strings.NewReader(""))
+		s.NoError(err)
+		response, err = client.Do(request)
+		s.NoError(err)
+		s.Equal(http.StatusNotFound, response.StatusCode)
 	})
 }

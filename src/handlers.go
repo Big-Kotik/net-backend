@@ -2,10 +2,23 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/gorilla/websocket"
 	"io"
 	"log"
+	"net-backend/src/hub"
+	"net-backend/src/msg"
+	"net-backend/src/security"
+	"net-backend/src/workers"
 	"net/http"
 )
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
@@ -20,25 +33,58 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "./static/home.html")
 }
 
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveCheckIDExist(w http.ResponseWriter, r *http.Request) {
+	h := hub.GetHub()
+	id := r.URL.Query().Get("id")
+	if h.ContainsID(id) {
+		_, err := w.Write([]byte("Ok"))
+		if err != nil {
+			http.Error(w, "Method crash", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		http.Error(w, "No such user", http.StatusNotFound)
+	}
+}
+
+func serveClientWs(h hub.Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	id := getID()
+	id := security.GetID()
 
-	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256), id: id}
-	client.hub.register <- client
+	client := &workers.Client{Hub: h, Conn: conn, Send: make(chan msg.ClientMessage, 256), ID: id}
+	client.Hub.RegisterClient(client)
 
-	client.send <- Message{Destination: id, Source: "server", Message: "Success"}
+	client.Send <- msg.ClientMessage{Destination: id, Source: h.GetID(), Message: "Success"}
 
-	go client.writePump()
-	go client.readPump()
+	go client.WritePump()
+	go client.ReadPump()
 }
 
-func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveNodeWs(h hub.Hub, w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	node := workers.Node{
+		Hub:  h,
+		Conn: conn,
+		Send: make(chan msg.NodeMessage, 256),
+	}
+
+	go node.Work()
+	go node.WritePump()
+	go node.ReadPump()
+	go node.Register()
+}
+
+func serveRoom(h hub.Hub, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -58,12 +104,12 @@ func serveRoom(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := getID()
-	room := &Room{hub: hub, id: id, usersID: ids, send: make(chan Message)}
+	id := security.GetID()
+	room := &workers.Room{Hub: h, ID: id, UsersID: ids, Send: make(chan msg.ClientMessage)}
 
-	hub.register <- room
+	h.RegisterClient(room)
 
-	go room.writePump()
+	go room.WritePump()
 
 	_, err = w.Write([]byte(id))
 	if err != nil {
