@@ -17,6 +17,9 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.17
+      
+    - name: Make net directory
+      run: mkdir net
 
     - name: Build
       run: go build -o net -v ./...
