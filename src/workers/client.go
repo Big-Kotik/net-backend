@@ -3,7 +3,7 @@ package workers
 import (
 	"encoding/json"
 	"log"
-	hub2 "net-backend/src/hub"
+	"net-backend/src/hub"
 	"net-backend/src/msg"
 	"time"
 
@@ -26,7 +26,7 @@ const (
 
 // Client struct for client
 type Client struct {
-	Hub hub2.Hub
+	Hub hub.Hub
 
 	Conn *websocket.Conn
 
@@ -48,7 +48,7 @@ func (c *Client) GetID() string {
 // ReadPump read websocket
 func (c *Client) ReadPump() {
 	defer func() {
-		c.Hub.Unregister(c)
+		c.Hub.UnregisterClient(c)
 		err := c.Conn.Close()
 		if err != nil {
 			return

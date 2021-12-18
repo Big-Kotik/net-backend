@@ -7,3 +7,9 @@ type Client interface {
 	GetSendChan() chan msg.ClientMessage
 	GetID() string
 }
+
+// Node interface for writing msg by hub
+type Node interface {
+	GetSendChan() chan msg.NodeMessage
+	GetID() string
+}

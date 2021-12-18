@@ -2,7 +2,7 @@ package workers
 
 import (
 	"log"
-	hub "net-backend/src/hub"
+	"net-backend/src/hub"
 	"net-backend/src/msg"
 )
 

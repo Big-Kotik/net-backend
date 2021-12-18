@@ -57,12 +57,31 @@ func serveClientWs(h hub.Hub, w http.ResponseWriter, r *http.Request) {
 	id := security.GetID()
 
 	client := &workers.Client{Hub: h, Conn: conn, Send: make(chan msg.ClientMessage, 256), ID: id}
-	client.Hub.Register(client)
+	client.Hub.RegisterClient(client)
 
 	client.Send <- msg.ClientMessage{Destination: id, Source: h.GetID(), Message: "Success"}
 
 	go client.WritePump()
 	go client.ReadPump()
+}
+
+func serveNodeWs(h hub.Hub, w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	node := workers.Node{
+		Hub:  h,
+		Conn: conn,
+		Send: make(chan msg.NodeMessage, 256),
+	}
+
+	go node.Work()
+	go node.WritePump()
+	go node.ReadPump()
+	go node.Register()
 }
 
 func serveRoom(h hub.Hub, w http.ResponseWriter, r *http.Request) {
@@ -88,7 +107,7 @@ func serveRoom(h hub.Hub, w http.ResponseWriter, r *http.Request) {
 	id := security.GetID()
 	room := &workers.Room{Hub: h, ID: id, UsersID: ids, Send: make(chan msg.ClientMessage)}
 
-	h.Register(room)
+	h.RegisterClient(room)
 
 	go room.WritePump()
 
