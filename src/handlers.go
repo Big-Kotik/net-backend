@@ -21,7 +21,6 @@ var upgrader = websocket.Upgrader{
 }
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
 	if r.URL.Path != "/" {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
